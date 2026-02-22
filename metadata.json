@@ -1,0 +1,7 @@
+{
+  "name": "Sauce Prompt",
+  "description": "Ferramenta de engenharia reversa de prompts de alto nível para profissionais, otimizada para o modelo Sauce Prompt Nano Banana Pro.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
