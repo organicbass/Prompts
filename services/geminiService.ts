@@ -46,24 +46,24 @@ Se o modo VÍDEO estiver ativo:
 
 // Interface para os resultados da detecção de óptica
 export interface DetectedOptics {
-  camera: string;
-  lens: string;
-  focalLength: string;
-  aperture: string;
-  confidence: string;
+    camera: string;
+    lens: string;
+    focalLength: string;
+    aperture: string;
+    confidence: string;
 }
 
 // Função para detectar automaticamente câmera/lente de uma imagem de estilo
 export const detectOpticsFromImage = async (imageData: string): Promise<DetectedOptics> => {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-  if (!apiKey) throw new Error("API Key não encontrada no .env");
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (!apiKey) throw new Error("API Key não encontrada no .env");
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
-  });
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
+        model: "gemini-2.5-flash",
+    });
 
-  const prompt = `Analise esta imagem e identifique os equipamentos de câmera/óptica que provavelmente foram usados para criar este visual.
+    const prompt = `Analise esta imagem e identifique os equipamentos de câmera/óptica que provavelmente foram usados para criar este visual.
 
 SINAIS A PROCURAR:
 - Bokeh SWIRLY (girando em espiral) = Helios
@@ -87,195 +87,195 @@ OPÇÕES DE LENTE: Helios, Cooke S7/i, Zeiss Master Prime, Leica Summilux-C, Ana
 OPÇÕES DE FOCAL: 14, 16, 20, 24, 35, 40, 50, 75, 85, 100, 135, 200
 OPÇÕES DE ABERTURA: f/0.95, f/1.4, f/1.8, f/2.0, f/2.8, f/4, f/5.6, f/8, f/11`;
 
-  try {
-    const result = await model.generateContent([
-      prompt,
-      { inlineData: { mimeType: 'image/jpeg', data: imageData.split(',')[1] } }
-    ]);
-    const response = await result.response;
-    const text = response.text();
+    try {
+        const result = await model.generateContent([
+            prompt,
+            { inlineData: { mimeType: 'image/jpeg', data: imageData.split(',')[1] } }
+        ]);
+        const response = await result.response;
+        const text = response.text();
 
-    // Limpar o texto e fazer parse do JSON
-    const cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-    const detected = JSON.parse(cleanedText);
+        // Limpar o texto e fazer parse do JSON
+        const cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        const detected = JSON.parse(cleanedText);
 
-    return {
-      camera: detected.camera || 'IMAX Film Camera',
-      lens: detected.lens || 'Helios',
-      focalLength: detected.focalLength || '50',
-      aperture: detected.aperture || 'f/4',
-      confidence: detected.confidence || 'medium'
-    };
-  } catch (error) {
-    console.error("Optics Detection Error:", error);
-    // Retornar valores padrão em caso de erro
-    return {
-      camera: 'IMAX Film Camera',
-      lens: 'Helios',
-      focalLength: '50',
-      aperture: 'f/4',
-      confidence: 'low'
-    };
-  }
+        return {
+            camera: detected.camera || 'IMAX Film Camera',
+            lens: detected.lens || 'Helios',
+            focalLength: detected.focalLength || '50',
+            aperture: detected.aperture || 'f/4',
+            confidence: detected.confidence || 'medium'
+        };
+    } catch (error) {
+        console.error("Optics Detection Error:", error);
+        // Retornar valores padrão em caso de erro
+        return {
+            camera: 'IMAX Film Camera',
+            lens: 'Helios',
+            focalLength: '50',
+            aperture: 'f/4',
+            confidence: 'low'
+        };
+    }
 };
 
 
 export const analyzeImageWithConfig = async (
-  images: ImageReferences,
-  clothing: ClothingConfig,
-  camera: CameraConfig,
-  targetModel: string,
-  renderingStyle: string,
-  artisticStyle: string,
-  manualGeneral: string[],
-  manualStyle: string[],
-  customDirections: string,
-  correctionInstructions: string,
-  videoMovement: string,
-  videoAction: string,
-  isVideoMode: boolean
+    images: ImageReferences,
+    clothing: ClothingConfig,
+    camera: CameraConfig,
+    targetModel: string,
+    renderingStyle: string,
+    artisticStyle: string,
+    manualGeneral: string[],
+    manualStyle: string[],
+    customDirections: string,
+    correctionInstructions: string,
+    videoMovement: string,
+    videoAction: string,
+    isVideoMode: boolean
 ): Promise<string> => {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-  if (!apiKey) throw new Error("API Key não encontrada no .env");
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (!apiKey) throw new Error("API Key não encontrada no .env");
 
-  // Usando @google/generative-ai (biblioteca oficial estável)
-  const genAI = new GoogleGenerativeAI(apiKey);
+    // Usando @google/generative-ai (biblioteca oficial estável)
+    const genAI = new GoogleGenerativeAI(apiKey);
 
-  // Usando gemini-1.5-flash com a biblioteca correta
-  const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
-    systemInstruction: SYSTEM_INSTRUCTION,
-  });
-
-  // Construir o prompt de texto
-  let textPrompt = "";
-
-  textPrompt += `TARGET AI ENGINE: ${targetModel}\n`;
-  textPrompt += `RENDERING MODE: ${renderingStyle}\n`;
-  textPrompt += `ARTISTIC STYLE: ${artisticStyle}\n\n`;
-
-  manualGeneral.forEach((desc, i) => {
-    if (desc) textPrompt += `GENERAL COMPOSITION & SCENE REFERENCE 0${i + 1}: ${desc}\n`;
-  });
-
-  manualStyle.forEach((desc, i) => {
-    if (desc) textPrompt += `STYLE & LOOK REFERENCE 0${i + 1}: ${desc}\n`;
-  });
-
-  if (clothing.accessories) {
-    textPrompt += `ACCESSORIES: ${clothing.accessories}\n`;
-  }
-  if (clothing.tattoos) {
-    textPrompt += `TATTOOS: ${clothing.tattoos}\n`;
-  }
-
-  textPrompt += `\nOPTICAL SPECIFICATIONS:\n`;
-  textPrompt += `- Camera Rig: ${camera.camera}\n`;
-  textPrompt += `- Optical Glass: ${camera.lens}\n`;
-  textPrompt += `- Focal Length: ${camera.focalLength}mm\n`;
-  textPrompt += `- Aperture: ${camera.aperture}\n\n`;
-
-  if (customDirections) {
-    textPrompt += `⚠️ USER CUSTOM DIRECTIONS (MANDATORY - FOLLOW EXACTLY):\n${customDirections}\n\n`;
-  }
-
-  if (isVideoMode) {
-    textPrompt += `🎬 VIDEO MODE ACTIVE:\n`;
-    textPrompt += `- Movement: ${videoMovement}\n`;
-    textPrompt += `- Action: ${videoAction}\n\n`;
-  }
-
-  if (correctionInstructions && images.resultImage) {
-    textPrompt += `🔄 REFINEMENT LOOP:\n`;
-    textPrompt += `- User Feedback: ${correctionInstructions}\n`;
-    textPrompt += `- Objective: Correct the provided "RESULT IMAGE" based on these instructions.\n\n`;
-  }
-
-  textPrompt += `Generate a detailed prompt in English for the target model. Focus on Social Media 2026 stop-power.`;
-
-  // Construir o array de parts para a API
-  const parts: any[] = [];
-
-  // Adicionar texto
-  parts.push({ text: textPrompt });
-
-  // Adicionar imagens se existirem
-  if (images.resultImage) {
-    parts.push({
-      inlineData: {
-        mimeType: 'image/jpeg',
-        data: images.resultImage.split(',')[1]
-      }
+    // Usando gemini-1.5-flash com a biblioteca correta
+    const model = genAI.getGenerativeModel({
+        model: "gemini-2.5-flash",
+        systemInstruction: SYSTEM_INSTRUCTION,
     });
-  }
-  [1, 2, 3].forEach(num => {
-    const key = `general${num}` as keyof ImageReferences;
-    if (images[key] && typeof images[key] === 'string') {
-      parts.push({
-        inlineData: {
-          mimeType: 'image/jpeg',
-          data: (images[key] as string).split(',')[1]
-        }
-      });
+
+    // Construir o prompt de texto
+    let textPrompt = "";
+
+    textPrompt += `TARGET AI ENGINE: ${targetModel}\n`;
+    textPrompt += `RENDERING MODE: ${renderingStyle}\n`;
+    textPrompt += `ARTISTIC STYLE: ${artisticStyle}\n\n`;
+
+    manualGeneral.forEach((desc, i) => {
+        if (desc) textPrompt += `GENERAL COMPOSITION & SCENE REFERENCE 0${i + 1}: ${desc}\n`;
+    });
+
+    manualStyle.forEach((desc, i) => {
+        if (desc) textPrompt += `STYLE & LOOK REFERENCE 0${i + 1}: ${desc}\n`;
+    });
+
+    if (clothing.accessories) {
+        textPrompt += `ACCESSORIES: ${clothing.accessories}\n`;
     }
-  });
-
-  if (images.faces.length > 0) {
-    images.faces.forEach((faceData) => {
-      parts.push({
-        inlineData: {
-          mimeType: 'image/jpeg',
-          data: faceData.split(',')[1]
-        }
-      });
-    });
-  }
-
-  if (images.shirt) {
-    parts.push({
-      inlineData: {
-        mimeType: 'image/jpeg',
-        data: images.shirt.split(',')[1]
-      }
-    });
-  }
-
-  if (images.pants) {
-    parts.push({
-      inlineData: {
-        mimeType: 'image/jpeg',
-        data: images.pants.split(',')[1]
-      }
-    });
-  }
-
-  if (images.footwear) {
-    parts.push({
-      inlineData: {
-        mimeType: 'image/jpeg',
-        data: images.footwear.split(',')[1]
-      }
-    });
-  }
-
-  [1, 2, 3].forEach(num => {
-    const key = `style${num}` as keyof ImageReferences;
-    if (images[key] && typeof images[key] === 'string') {
-      parts.push({
-        inlineData: {
-          mimeType: 'image/jpeg',
-          data: (images[key] as string).split(',')[1]
-        }
-      });
+    if (clothing.tattoos) {
+        textPrompt += `TATTOOS: ${clothing.tattoos}\n`;
     }
-  });
 
-  try {
-    const result = await model.generateContent(parts);
-    const response = await result.response;
-    return response.text() || "Falha ao gerar o prompt.";
-  } catch (error) {
-    console.error("Gemini Analysis Error:", error);
-    throw new Error("A análise falhou. Por favor, tente novamente.");
-  }
+    textPrompt += `\nOPTICAL SPECIFICATIONS:\n`;
+    textPrompt += `- Camera Rig: ${camera.camera}\n`;
+    textPrompt += `- Optical Glass: ${camera.lens}\n`;
+    textPrompt += `- Focal Length: ${camera.focalLength}mm\n`;
+    textPrompt += `- Aperture: ${camera.aperture}\n\n`;
+
+    if (customDirections) {
+        textPrompt += `⚠️ USER CUSTOM DIRECTIONS (MANDATORY - FOLLOW EXACTLY):\n${customDirections}\n\n`;
+    }
+
+    if (isVideoMode) {
+        textPrompt += `🎬 VIDEO MODE ACTIVE:\n`;
+        textPrompt += `- Movement: ${videoMovement}\n`;
+        textPrompt += `- Action: ${videoAction}\n\n`;
+    }
+
+    if (correctionInstructions && images.resultImage) {
+        textPrompt += `🔄 REFINEMENT LOOP:\n`;
+        textPrompt += `- User Feedback: ${correctionInstructions}\n`;
+        textPrompt += `- Objective: Correct the provided "RESULT IMAGE" based on these instructions.\n\n`;
+    }
+
+    textPrompt += `Generate a detailed prompt in English for the target model. Focus on Social Media 2026 stop-power.`;
+
+    // Construir o array de parts para a API
+    const parts: any[] = [];
+
+    // Adicionar texto
+    parts.push({ text: textPrompt });
+
+    // Adicionar imagens se existirem
+    if (images.resultImage) {
+        parts.push({
+            inlineData: {
+                mimeType: 'image/jpeg',
+                data: images.resultImage.split(',')[1]
+            }
+        });
+    }
+    [1, 2, 3].forEach(num => {
+        const key = `general${num}` as keyof ImageReferences;
+        if (images[key] && typeof images[key] === 'string') {
+            parts.push({
+                inlineData: {
+                    mimeType: 'image/jpeg',
+                    data: (images[key] as string).split(',')[1]
+                }
+            });
+        }
+    });
+
+    if (images.faces.length > 0) {
+        images.faces.forEach((faceData) => {
+            parts.push({
+                inlineData: {
+                    mimeType: 'image/jpeg',
+                    data: faceData.split(',')[1]
+                }
+            });
+        });
+    }
+
+    if (images.shirt) {
+        parts.push({
+            inlineData: {
+                mimeType: 'image/jpeg',
+                data: images.shirt.split(',')[1]
+            }
+        });
+    }
+
+    if (images.pants) {
+        parts.push({
+            inlineData: {
+                mimeType: 'image/jpeg',
+                data: images.pants.split(',')[1]
+            }
+        });
+    }
+
+    if (images.footwear) {
+        parts.push({
+            inlineData: {
+                mimeType: 'image/jpeg',
+                data: images.footwear.split(',')[1]
+            }
+        });
+    }
+
+    [1, 2, 3].forEach(num => {
+        const key = `style${num}` as keyof ImageReferences;
+        if (images[key] && typeof images[key] === 'string') {
+            parts.push({
+                inlineData: {
+                    mimeType: 'image/jpeg',
+                    data: (images[key] as string).split(',')[1]
+                }
+            });
+        }
+    });
+
+    try {
+        const result = await model.generateContent(parts);
+        const response = await result.response;
+        return response.text() || "Falha ao gerar o prompt.";
+    } catch (error) {
+        console.error("Gemini Analysis Error:", error);
+        throw new Error("A análise falhou. Por favor, tente novamente.");
+    }
 };
