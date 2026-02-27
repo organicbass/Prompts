@@ -1,22 +1,8 @@
 
 import React, { useState, useRef } from 'react';
-import { analyzeImageWithConfig, detectOpticsFromImage } from './services/geminiService';
-import { AppState, CameraConfig, ClothingConfig, ImageReferences, AIModel } from './types';
+import { analyzeImageWithConfig } from './services/geminiService';
+import { AppState, CameraConfig, ClothingConfig, ImageReferences } from './types';
 import { UploadIcon, CameraIcon, CopyIcon, TrashIcon, SparklesIcon, CheckIcon } from './components/Icons';
-
-const MODELS: AIModel[] = [
-    { id: 'soul', name: 'Higgsfield Soul', description: 'Visual de moda ultra-realista' },
-    { id: 'popcorn', name: 'Higgsfield Popcorn', description: 'Storyboard, edição e criação' },
-    { id: 'banana', name: 'Nano Banana Pro', description: 'O melhor modelo de imagem 4K' },
-    { id: 'seeddream', name: 'Seeddream 4.5', description: 'Modelo de imagem 4K de próxima geração' },
-    { id: 'gpt', name: 'GPT Image 1.5', description: 'Renderização de precisão com cores reais' },
-    { id: 'flux', name: 'FLUX.2', description: 'Detalhes otimizados para velocidade' },
-    { id: 'zimage', name: 'Z-Image', description: 'Retratos instantâneos realistas' },
-    { id: 'kling', name: 'Kling 01 Image', description: 'Imagens fotorrealistas e precisas' },
-    { id: 'wan', name: 'Wan 2.2 Image', description: 'Imagens realistas de alta qualidade' },
-    { id: 'reve', name: 'Reve', description: 'Modelo avançado de edição de imagem' },
-    { id: 'topaz', name: 'Topaz', description: 'Upscaler de alta resolução' },
-];
 
 const RENDERING_MODES = [
     { id: 'photo', name: 'Photorealistic', icon: '📸' },
@@ -24,19 +10,6 @@ const RENDERING_MODES = [
     { id: '3d_cartoon', name: '3D Cartoon', icon: '🐣' },
     { id: '3d_poly', name: '3D Poly', icon: '💎' },
     { id: '2d', name: '2D Style', icon: '✏️' },
-];
-
-const ARTISTIC_STYLES = [
-    // Row 1
-    'Layer mixed media', 'Sketch', 'Canvas', 'Overexposed', 'Paper', 'Noir',
-    // Row 2
-    'Particles', 'Hand paint', 'Toxic', 'Tracking', 'Ultraviolet', 'Windows',
-    // Row 3
-    'Acid', 'Palette', 'Comic', 'Akrill', 'Two color', 'Multiverse', 'Fragments', 'Origami', 'Random Glow',
-    // Row 4
-    'Vintage', 'Cannabis', 'Bubbles', 'Magazine', 'Cold vision', 'Modern', 'LSD', 'Broken mirror', 'Lava',
-    // Row 5
-    'Flash comic', 'Flash cosmic', 'Marble', 'Ocean'
 ];
 
 const CAMERA_PRESETS = [
@@ -101,43 +74,20 @@ const ReferenceSlot: React.FC<{
     );
 };
 
-const ModelItem: React.FC<{ model: AIModel; active: boolean; onClick: () => void }> = ({ model, active, onClick }) => (
-    <button
-        onClick={onClick}
-        className={`w-full flex items-center gap-4 p-3 rounded-2xl border transition-all ${active ? 'bg-white/5 border-white/20' : 'bg-transparent border-transparent hover:bg-white/[0.02]'
-            }`}
-    >
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center border ${active ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' : 'bg-neutral-900 border-white/5 text-neutral-600'}`}>
-            <SparklesIcon className="w-5 h-5" />
-        </div>
-        <div className="flex-1 text-left">
-            <div className="flex items-center gap-2">
-                <span className={`text-[11px] font-black uppercase tracking-wider ${active ? 'text-white' : 'text-neutral-400'}`}>{model.name}</span>
-            </div>
-            <p className="text-[10px] text-neutral-600 font-medium">{model.description}</p>
-        </div>
-    </button>
-);
-
 const App: React.FC = () => {
     const [state, setState] = useState<AppState>({
         images: {
-            general1: null, general2: null, general3: null,
+            general: [],
             faces: [],
             shirt: null, pants: null, footwear: null,
-            style1: null, style2: null, style3: null
+            styles: [],
+            resultImage: null
         },
         clothing: { shirt: '', pants: '', footwear: '', accessories: '', tattoos: '' },
         cameraConfig: { camera: 'IMAX Film Camera', lens: 'Helios', focalLength: '50', aperture: 'f/4' },
-        selectedModel: 'banana',
         renderingStyle: 'Photorealistic',
-        artisticStyle: 'None',
-        manualGeneral1: '',
-        manualGeneral2: '',
-        manualGeneral3: '',
-        manualStyle1: '',
-        manualStyle2: '',
-        manualStyle3: '',
+        manualGeneral: [],
+        manualStyles: [],
         customDirections: '',
         correctionInstructions: '',
         videoMovement: '',
@@ -150,19 +100,29 @@ const App: React.FC = () => {
     });
     const [copied, setCopied] = useState(false);
 
-    const [detectingOptics, setDetectingOptics] = useState(false);
-
     const handleUpload = async (type: keyof ImageReferences, data: string | null, index?: number) => {
         setState(prev => {
             const newImages = { ...prev.images };
-            if (type === 'faces') {
+            if (Array.isArray(newImages[type])) {
+                const arr = [...(newImages[type] as string[])];
                 if (data === null && index !== undefined) {
-                    newImages.faces = newImages.faces.filter((_, i) => i !== index);
-                } else if (data !== null) {
-                    if (newImages.faces.length < 10) {
-                        newImages.faces = [...newImages.faces, data];
+                    arr.splice(index, 1);
+                    // Also remove manual description if applicable
+                    if (type === 'general') {
+                        const newManual = [...prev.manualGeneral];
+                        newManual.splice(index, 1);
+                        return { ...prev, images: { ...newImages, [type]: arr }, manualGeneral: newManual, result: null };
                     }
+                    if (type === 'styles') {
+                        const newManual = [...prev.manualStyles];
+                        newManual.splice(index, 1);
+                        return { ...prev, images: { ...newImages, [type]: arr }, manualStyles: newManual, result: null };
+                    }
+                } else if (data !== null) {
+                    if (type === 'faces' && arr.length >= 10) return prev;
+                    arr.push(data);
                 }
+                newImages[type] = arr as any;
             } else {
                 (newImages[type] as any) = data;
             }
@@ -170,19 +130,30 @@ const App: React.FC = () => {
         });
     };
 
+    const handleManualChange = (type: 'general' | 'style', index: number, value: string) => {
+        setState(prev => {
+            if (type === 'general') {
+                const newManual = [...prev.manualGeneral];
+                newManual[index] = value;
+                return { ...prev, manualGeneral: newManual };
+            } else {
+                const newManual = [...prev.manualStyles];
+                newManual[index] = value;
+                return { ...prev, manualStyles: newManual };
+            }
+        });
+    };
+
     const handleAnalyze = async (mode: 'initial' | 'refinement' | 'video' = 'initial') => {
         setState(prev => ({ ...prev, analyzing: true, error: null, isVideoMode: mode === 'video' }));
         try {
-            const activeModelName = MODELS.find(m => m.id === state.selectedModel)?.name || 'Nano Banana Pro';
             const prompt = await analyzeImageWithConfig(
                 state.images,
                 state.clothing,
                 state.cameraConfig,
-                activeModelName,
                 state.renderingStyle,
-                state.artisticStyle,
-                [state.manualGeneral1, state.manualGeneral2, state.manualGeneral3],
-                [state.manualStyle1, state.manualStyle2, state.manualStyle3],
+                state.manualGeneral,
+                state.manualStyles,
                 state.customDirections,
                 mode === 'refinement' ? state.correctionInstructions : '',
                 mode === 'video' ? state.videoMovement : '',
@@ -218,34 +189,16 @@ const App: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-6">
                     <div className="text-right">
-                        <p className="text-[9px] text-neutral-600 uppercase font-black tracking-widest mb-1">Status do Motor</p>
-                        <p className="text-xs text-blue-500 font-bold uppercase">{MODELS.find(m => m.id === state.selectedModel)?.name} ATIVO</p>
+                        <p className="text-[9px] text-neutral-600 uppercase font-black tracking-widest mb-1">Status Studio</p>
+                        <p className="text-xs text-blue-500 font-bold uppercase">NANO BANANA PRO ATIVO</p>
                     </div>
                 </div>
             </header>
 
             <main className="w-full max-w-7xl grid grid-cols-1 xl:grid-cols-12 gap-10">
 
-                {/* Left: Models Selection & Style (3 cols) */}
+                {/* Left: Rendering Mode (3 cols) */}
                 <div className="xl:col-span-3 space-y-6">
-                    <section className="bg-[#0c0c0c] rounded-[32px] p-6 border border-white/5">
-                        <h2 className="text-[9px] font-black text-neutral-500 uppercase tracking-[0.4em] mb-6 flex items-center gap-3">
-                            <div className="w-6 h-[1px] bg-neutral-800"></div>
-                            Motor Alvo
-                        </h2>
-                        <div className="space-y-1 h-[400px] overflow-y-auto custom-scrollbar pr-2">
-                            {MODELS.map(model => (
-                                <ModelItem
-                                    key={model.id}
-                                    model={model}
-                                    active={state.selectedModel === model.id}
-                                    onClick={() => setState(prev => ({ ...prev, selectedModel: model.id, result: null }))}
-                                />
-                            ))}
-                        </div>
-                    </section>
-
-                    {/* Rendering Mode Selector */}
                     <section className="bg-[#0c0c0c] rounded-[32px] p-6 border border-white/5">
                         <h2 className="text-[9px] font-black text-neutral-500 uppercase tracking-[0.4em] mb-6 flex items-center gap-3">
                             <div className="w-6 h-[1px] bg-neutral-800"></div>
@@ -267,7 +220,7 @@ const App: React.FC = () => {
                     </section>
                 </div>
 
-                {/* Center: References & Artistic Styles (6 cols) */}
+                {/* Center: References (6 cols) */}
                 <div className="xl:col-span-6 space-y-10">
 
                     {/* Reference Slots */}
@@ -278,90 +231,83 @@ const App: React.FC = () => {
                         </h2>
 
                         <div className="space-y-12">
-                            {/* Reference Slots: Geral 01, 02, 03 */}
-                            <div className="grid grid-cols-3 gap-6">
-                                {[1, 2, 3].map((num) => (
-                                    <div key={`geral-${num}`} className="space-y-4">
-                                        <ReferenceSlot
-                                            label={`0${num}. Geral`}
-                                            image={state.images[`general${num}` as keyof ImageReferences] as string | null}
-                                            onUpload={(d) => handleUpload(`general${num}` as keyof ImageReferences, d)}
-                                            aspect="aspect-video"
-                                        />
-                                        <div className="bg-[#121212] rounded-xl p-3 border border-white/5">
-                                            <h3 className="text-[10px] font-black text-white uppercase tracking-widest mb-1">Composição Geral</h3>
-                                            <textarea
-                                                placeholder="Descreva a cena manualmente..."
-                                                value={state[`manualGeneral${num}` as keyof AppState] as string}
-                                                onChange={(e) => setState(p => ({ ...p, [`manualGeneral${num}`]: e.target.value }))}
-                                                className="w-full bg-transparent border-none outline-none text-[10px] text-neutral-400 font-medium placeholder:text-neutral-700 resize-none h-12 custom-scrollbar"
+                            {/* General References dynamic list */}
+                            <div className="space-y-6">
+                                <h3 className="text-[10px] font-black text-white uppercase tracking-widest">Cena e Composição</h3>
+                                <div className="grid grid-cols-3 gap-6">
+                                    {state.images.general.map((img, i) => (
+                                        <div key={`general-${i}`} className="space-y-4">
+                                            <ReferenceSlot
+                                                label={`Geral ${i + 1}`}
+                                                image={img}
+                                                onUpload={(d) => handleUpload('general', d, i)}
+                                                aspect="aspect-video"
                                             />
+                                            <div className="bg-[#121212] rounded-xl p-3 border border-white/5">
+                                                <textarea
+                                                    placeholder="Descreva a cena..."
+                                                    value={state.manualGeneral[i] || ''}
+                                                    onChange={(e) => handleManualChange('general', i, e.target.value)}
+                                                    className="w-full bg-transparent border-none outline-none text-[10px] text-neutral-400 font-medium placeholder:text-neutral-700 resize-none h-12 custom-scrollbar"
+                                                />
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    ))}
+                                    <ReferenceSlot
+                                        label="+ Geral"
+                                        image={null}
+                                        onUpload={(d) => handleUpload('general', d)}
+                                        aspect="aspect-video"
+                                    />
+                                </div>
                             </div>
 
-                            {/* Reference Slots: Estilo 01, 02, 03 */}
-                            <div className="grid grid-cols-3 gap-6 pt-8 border-t border-white/5">
-                                {[1, 2, 3].map((num) => (
-                                    <div key={`style-${num}`} className="space-y-4">
-                                        <ReferenceSlot
-                                            label={`Copiar Estilo 0${num}`}
-                                            image={state.images[`style${num}` as keyof ImageReferences] as string | null}
-                                            onUpload={(d) => handleUpload(`style${num}` as keyof ImageReferences, d)}
-                                            aspect="aspect-video"
-                                            highlight
-                                        />
-                                        <div className="bg-[#121212] rounded-xl p-3 border border-blue-500/10">
-                                            <h3 className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1">Filtro e Cores</h3>
-                                            <textarea
-                                                placeholder="Moody, vintage, etc..."
-                                                value={state[`manualStyle${num}` as keyof AppState] as string}
-                                                onChange={(e) => setState(p => ({ ...p, [`manualStyle${num}`]: e.target.value }))}
-                                                className="w-full bg-transparent border-none outline-none text-[10px] text-blue-200/50 font-medium placeholder:text-neutral-700 resize-none h-12 custom-scrollbar"
+                            {/* Style References dynamic list */}
+                            <div className="space-y-6 pt-8 border-t border-white/5">
+                                <h3 className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Estilo e Look</h3>
+                                <div className="grid grid-cols-3 gap-6">
+                                    {state.images.styles.map((img, i) => (
+                                        <div key={`style-${i}`} className="space-y-4">
+                                            <ReferenceSlot
+                                                label={`Estilo ${i + 1}`}
+                                                image={img}
+                                                onUpload={(d) => handleUpload('styles', d, i)}
+                                                aspect="aspect-video"
+                                                highlight
                                             />
+                                            <div className="bg-[#121212] rounded-xl p-3 border border-blue-500/10">
+                                                <textarea
+                                                    placeholder="Moody, vintage..."
+                                                    value={state.manualStyles[i] || ''}
+                                                    onChange={(e) => handleManualChange('style', i, e.target.value)}
+                                                    className="w-full bg-transparent border-none outline-none text-[10px] text-blue-200/50 font-medium placeholder:text-neutral-700 resize-none h-12 custom-scrollbar"
+                                                />
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    ))}
+                                    <ReferenceSlot
+                                        label="+ Estilo"
+                                        image={null}
+                                        onUpload={(d) => handleUpload('styles', d)}
+                                        aspect="aspect-video"
+                                        highlight
+                                    />
+                                </div>
                             </div>
 
-                            {/* User Custom Directions */}
+                            {/* User Custom Directions (Main Prompt Box) */}
                             <div className="pt-8 border-t border-white/5">
                                 <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 rounded-2xl p-4 border border-purple-500/20">
                                     <h3 className="text-[10px] font-black text-purple-400 uppercase tracking-widest mb-3 flex items-center gap-2">
                                         <span>✨</span> O Que Adicionar no Prompt
                                     </h3>
                                     <textarea
-                                        placeholder="Ex: CTA em português, estilo minimalista, foco no produto, tom profissional, incluir call-to-action..."
+                                        placeholder="Ex: CTA em português, estilo minimalista, foco no produto..."
                                         value={state.customDirections}
                                         onChange={(e) => setState(p => ({ ...p, customDirections: e.target.value }))}
                                         className="w-full bg-black/40 border border-purple-500/20 rounded-xl p-3 text-[11px] text-purple-100 font-medium placeholder:text-neutral-600 resize-none h-20 custom-scrollbar focus:border-purple-500/50 focus:outline-none transition-all"
                                     />
                                     <p className="text-[9px] text-neutral-600 mt-2">Suas instruções serão seguidas com prioridade máxima</p>
-                                </div>
-                            </div>
-
-                            {/* Artistic Style Library */}
-                            <div className="pt-8 border-t border-white/5">
-                                <h3 className="text-[10px] font-black text-white uppercase tracking-widest mb-4">Estilo Artístico (Cinema Studio)</h3>
-                                <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 h-48 overflow-y-auto custom-scrollbar pr-2 p-1">
-                                    <button
-                                        onClick={() => setState(prev => ({ ...prev, artisticStyle: 'None', result: null }))}
-                                        className={`p-2 rounded-lg text-[8px] font-black uppercase border transition-all ${state.artisticStyle === 'None' ? 'bg-white text-black border-white' : 'bg-[#1a1a1a] border-white/5 text-neutral-600 hover:border-white/20'
-                                            }`}
-                                    >
-                                        Nenhum
-                                    </button>
-                                    {ARTISTIC_STYLES.map(style => (
-                                        <button
-                                            key={style}
-                                            onClick={() => setState(prev => ({ ...prev, artisticStyle: style, result: null }))}
-                                            className={`p-2 rounded-lg text-[8px] font-black uppercase border transition-all leading-tight text-center ${state.artisticStyle === style ? 'bg-blue-500 text-white border-blue-400' : 'bg-[#1a1a1a] border-white/5 text-neutral-600 hover:border-white/20'
-                                                }`}
-                                        >
-                                            {style}
-                                        </button>
-                                    ))}
                                 </div>
                             </div>
 
@@ -390,9 +336,6 @@ const App: React.FC = () => {
                                         {state.images.faces.length < 10 && (
                                             <ReferenceSlot label="+ Rosto" image={null} onUpload={(d) => handleUpload('faces', d)} />
                                         )}
-                                        {Array.from({ length: Math.max(0, 10 - Math.max(state.images.faces.length + 1, 0)) }).map((_, i) => (
-                                            state.images.faces.length < 10 ? <div key={`empty-${i}`} className="aspect-[3/4] rounded-2xl border border-white/[0.02] bg-black/20"></div> : null
-                                        ))}
                                     </div>
                                 )}
                             </div>
@@ -403,7 +346,7 @@ const App: React.FC = () => {
                                     <ReferenceSlot label="Camisa" image={state.images.shirt} onUpload={(d) => handleUpload('shirt', d)} />
                                     <div className="bg-[#121212] rounded-xl p-3 border border-white/5">
                                         <textarea
-                                            placeholder="Ex: Camisa social preta..."
+                                            placeholder="Ex: Camisa social..."
                                             value={state.clothing.shirt}
                                             onChange={(e) => setState(p => ({ ...p, clothing: { ...p.clothing, shirt: e.target.value } }))}
                                             className="w-full bg-transparent border-none outline-none text-[9px] text-neutral-400 font-medium placeholder:text-neutral-700 resize-none h-10 custom-scrollbar"
@@ -414,7 +357,7 @@ const App: React.FC = () => {
                                     <ReferenceSlot label="Calça" image={state.images.pants} onUpload={(d) => handleUpload('pants', d)} />
                                     <div className="bg-[#121212] rounded-xl p-3 border border-white/5">
                                         <textarea
-                                            placeholder="Ex: Calça jeans azul..."
+                                            placeholder="Ex: Calça jeans..."
                                             value={state.clothing.pants}
                                             onChange={(e) => setState(p => ({ ...p, clothing: { ...p.clothing, pants: e.target.value } }))}
                                             className="w-full bg-transparent border-none outline-none text-[9px] text-neutral-400 font-medium placeholder:text-neutral-700 resize-none h-10 custom-scrollbar"
@@ -425,37 +368,35 @@ const App: React.FC = () => {
                                     <ReferenceSlot label="Calçados" image={state.images.footwear} onUpload={(d) => handleUpload('footwear', d)} />
                                     <div className="bg-[#121212] rounded-xl p-3 border border-white/5">
                                         <textarea
-                                            placeholder="Ex: Tênis esportivo..."
+                                            placeholder="Ex: Tênis..."
                                             value={state.clothing.footwear}
                                             onChange={(e) => setState(p => ({ ...p, clothing: { ...p.clothing, footwear: e.target.value } }))}
                                             className="w-full bg-transparent border-none outline-none text-[9px] text-neutral-400 font-medium placeholder:text-neutral-700 resize-none h-10 custom-scrollbar"
                                         />
                                     </div>
                                 </div>
-                                {/* Accessories */}
                                 <div className="space-y-3">
                                     <div className="aspect-[3/4] rounded-2xl border border-dashed border-white/5 bg-[#121212] flex flex-col items-center justify-center p-4 text-center">
                                         <SparklesIcon className="w-5 h-5 text-neutral-600 mb-2" />
-                                        <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-widest leading-tight">Acessórios</span>
+                                        <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-widest">Acessórios</span>
                                     </div>
                                     <div className="bg-[#121212] rounded-xl p-3 border border-white/5">
                                         <textarea
-                                            placeholder="Brincos, relógio, etc..."
+                                            placeholder="Relógio, etc..."
                                             value={state.clothing.accessories}
                                             onChange={(e) => setState(p => ({ ...p, clothing: { ...p.clothing, accessories: e.target.value } }))}
                                             className="w-full bg-transparent border-none outline-none text-[9px] text-neutral-400 font-medium placeholder:text-neutral-700 resize-none h-10 custom-scrollbar"
                                         />
                                     </div>
                                 </div>
-                                {/* Tattoos */}
                                 <div className="space-y-3">
                                     <div className="aspect-[3/4] rounded-2xl border border-dashed border-white/5 bg-[#121212] flex flex-col items-center justify-center p-4 text-center">
                                         <SparklesIcon className="w-5 h-5 text-neutral-600 mb-2" />
-                                        <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-widest leading-tight">Tatuagem</span>
+                                        <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-widest">Tatuagem</span>
                                     </div>
                                     <div className="bg-[#121212] rounded-xl p-3 border border-white/5">
                                         <textarea
-                                            placeholder="Descrição das tattoos..."
+                                            placeholder="Descrição..."
                                             value={state.clothing.tattoos}
                                             onChange={(e) => setState(p => ({ ...p, clothing: { ...p.clothing, tattoos: e.target.value } }))}
                                             className="w-full bg-transparent border-none outline-none text-[9px] text-neutral-400 font-medium placeholder:text-neutral-700 resize-none h-10 custom-scrollbar"
@@ -465,8 +406,6 @@ const App: React.FC = () => {
                             </div>
                         </div>
                     </section>
-
-                    {/* Removed Cinema Studio Setup - using only optics detection */}
                 </div>
 
                 {/* Right: Output (3 cols) */}
@@ -501,7 +440,6 @@ const App: React.FC = () => {
                                     <p className="text-[9px] font-black text-blue-500 uppercase tracking-[0.3em] animate-pulse">
                                         {state.isVideoMode ? 'Sintetizando Movimento...' : 'Sincronizando Studio...'}
                                     </p>
-                                    <p className="text-[8px] text-neutral-600 mt-2 uppercase">Integrando estilos: {state.renderingStyle} + {state.artisticStyle}</p>
                                     <p className="text-[7px] text-neutral-700 mt-1 uppercase">Otimizando para Algoritmo 2026</p>
                                 </div>
                             </div>
@@ -512,13 +450,13 @@ const App: React.FC = () => {
                             disabled={state.analyzing}
                             className="mt-8 w-full py-5 bg-white text-black font-black text-[10px] uppercase tracking-[0.3em] rounded-[20px] hover:bg-blue-600 hover:text-white transition-all shadow-lg disabled:opacity-50 active:scale-[0.98]"
                         >
-                            {state.analyzing && !state.isVideoMode && !state.correctionInstructions ? 'Sincronizando...' : 'Sintetizar Imagem'}
+                            {state.analyzing ? 'Sincronizando...' : 'Sintetizar Imagem'}
                         </button>
                     </div>
                 </div>
             </main>
 
-            {/* NEW: Refinement & Video Section */}
+            {/* Refinement & Video Section */}
             <section className="w-full max-w-7xl mt-12 grid grid-cols-1 md:grid-cols-2 gap-10">
                 {/* Refinement Loop */}
                 <div className="bg-[#0c0c0c] rounded-[40px] p-8 border border-white/5">
@@ -543,7 +481,7 @@ const App: React.FC = () => {
                             <div className="bg-orange-500/5 rounded-2xl p-4 border border-orange-500/10 h-full">
                                 <h4 className="text-[9px] font-black text-orange-500 uppercase tracking-widest mb-2">Instruções de Correção</h4>
                                 <textarea
-                                    placeholder="Ex: Mude a iluminação para dourado, ajuste o caimento da camisa..."
+                                    placeholder="Ex: Mude a iluminação..."
                                     value={state.correctionInstructions}
                                     onChange={(e) => setState(p => ({ ...p, correctionInstructions: e.target.value }))}
                                     className="w-full bg-transparent border-none outline-none text-[10px] text-orange-100/70 font-medium placeholder:text-neutral-700 resize-none h-20 custom-scrollbar"
@@ -586,16 +524,16 @@ const App: React.FC = () => {
                             <h4 className="text-[9px] font-black text-neutral-500 uppercase tracking-widest mb-2">Movimento de Câmera</h4>
                             <input
                                 type="text"
-                                placeholder="Ex: Slow zoom in, orbit right, crane up..."
+                                placeholder="Ex: Slow zoom in..."
                                 value={state.videoMovement}
                                 onChange={(e) => setState(p => ({ ...p, videoMovement: e.target.value }))}
                                 className="w-full bg-transparent border-none outline-none text-[11px] text-white font-medium placeholder:text-neutral-700"
                             />
                         </div>
                         <div className="bg-[#121212] rounded-2xl p-4 border border-white/5">
-                            <h4 className="text-[9px] font-black text-neutral-500 uppercase tracking-widest mb-2">Ação/Dinamismo (Hook de Vídeo)</h4>
+                            <h4 className="text-[9px] font-black text-neutral-500 uppercase tracking-widest mb-2">Ação/Dinamismo</h4>
                             <textarea
-                                placeholder="Ex: O sujeito sorri e olha para a câmera enquanto caminha lentamente..."
+                                placeholder="O sujeito sorri..."
                                 value={state.videoAction}
                                 onChange={(e) => setState(p => ({ ...p, videoAction: e.target.value }))}
                                 className="w-full bg-transparent border-none outline-none text-[11px] text-white font-medium placeholder:text-neutral-700 resize-none h-20 custom-scrollbar"
@@ -612,7 +550,6 @@ const App: React.FC = () => {
                 </div>
             </section>
 
-
             <footer className="mt-24 py-12 border-t border-white/5 w-full max-w-7xl flex flex-col items-center gap-6">
                 <div className="flex gap-12 opacity-10 grayscale">
                     <div className="text-[9px] font-black uppercase tracking-[0.4em]">Engine de Consistência Studio</div>
@@ -622,11 +559,11 @@ const App: React.FC = () => {
             </footer>
 
             <style>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #1a1a1a; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #2a2a2a; }
-      `}</style>
+                .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+                .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+                .custom-scrollbar::-webkit-scrollbar-thumb { background: #1a1a1a; border-radius: 10px; }
+                .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #2a2a2a; }
+            `}</style>
         </div>
     );
 };

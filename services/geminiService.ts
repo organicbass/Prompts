@@ -12,7 +12,7 @@ O teu objetivo é criar prompts de texto que não apenas gerem imagens bonitas, 
 - TEXTURAS TÁTEIS: Descreva tecidos, pele e cenários com riqueza sensorial (hiper-realismo).
 
 # TAREFA
-Receberás múltiplas imagens de referência e parâmetros de estilo. Deves sintetizar tudo em um prompt mestre.
+Receberás múltiplas imagens de referência e parâmetros de estilo. Deves sintetizar tudo em um prompt mestre otimizado para o modelo Sauce Prompt Nano Banana Pro.
 
 # 1. CIRCUITO DE REFINAMENTO (IMAGE-TO-IMAGE CORRECTION)
 Se receberes uma "IMAGEM DE RESULTADO" e "INSTRUÇÕES DE AJUSTE":
@@ -27,7 +27,7 @@ Se o modo VÍDEO estiver ativo:
 
 # 3. COMPOSIÇÃO GERAL, ESTILO E IDENTIDADE
 - Mantenha a fidelidade absoluta às fotos de rosto e vestuário.
-- Para estilos, extraia filtros, color grade e efeitos visuais únicos.
+- Para estilos, extraia filtros, color grade e efeitos visuais únicos das referências fornecidas.
 
 # REGRAS CRÍTICAS DE SAÍDA
 - APENAS O PROMPT: Não inclua saudações, explicações ou introduções (ex: "Aqui está seu prompt").
@@ -124,11 +124,9 @@ export const analyzeImageWithConfig = async (
     images: ImageReferences,
     clothing: ClothingConfig,
     camera: CameraConfig,
-    targetModel: string,
     renderingStyle: string,
-    artisticStyle: string,
     manualGeneral: string[],
-    manualStyle: string[],
+    manualStyles: string[],
     customDirections: string,
     correctionInstructions: string,
     videoMovement: string,
@@ -138,10 +136,8 @@ export const analyzeImageWithConfig = async (
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     if (!apiKey) throw new Error("API Key não encontrada no .env");
 
-    // Usando @google/generative-ai (biblioteca oficial estável)
     const genAI = new GoogleGenerativeAI(apiKey);
 
-    // Usando gemini-1.5-flash com a biblioteca correta
     const model = genAI.getGenerativeModel({
         model: "gemini-2.5-flash",
         systemInstruction: SYSTEM_INSTRUCTION,
@@ -150,15 +146,14 @@ export const analyzeImageWithConfig = async (
     // Construir o prompt de texto
     let textPrompt = "";
 
-    textPrompt += `TARGET AI ENGINE: ${targetModel}\n`;
-    textPrompt += `RENDERING MODE: ${renderingStyle}\n`;
-    textPrompt += `ARTISTIC STYLE: ${artisticStyle}\n\n`;
+    textPrompt += `TARGET MODEL: Sauce Prompt Nano Banana Pro\n`;
+    textPrompt += `RENDERING MODE: ${renderingStyle}\n\n`;
 
     manualGeneral.forEach((desc, i) => {
         if (desc) textPrompt += `GENERAL COMPOSITION & SCENE REFERENCE 0${i + 1}: ${desc}\n`;
     });
 
-    manualStyle.forEach((desc, i) => {
+    manualStyles.forEach((desc, i) => {
         if (desc) textPrompt += `STYLE & LOOK REFERENCE 0${i + 1}: ${desc}\n`;
     });
 
@@ -208,13 +203,14 @@ export const analyzeImageWithConfig = async (
             }
         });
     }
-    [1, 2, 3].forEach(num => {
-        const key = `general${num}` as keyof ImageReferences;
-        if (images[key] && typeof images[key] === 'string') {
+
+    // General Images
+    images.general.forEach(img => {
+        if (img) {
             parts.push({
                 inlineData: {
                     mimeType: 'image/jpeg',
-                    data: (images[key] as string).split(',')[1]
+                    data: img.split(',')[1]
                 }
             });
         }
@@ -258,13 +254,13 @@ export const analyzeImageWithConfig = async (
         });
     }
 
-    [1, 2, 3].forEach(num => {
-        const key = `style${num}` as keyof ImageReferences;
-        if (images[key] && typeof images[key] === 'string') {
+    // Style Images
+    images.styles.forEach(img => {
+        if (img) {
             parts.push({
                 inlineData: {
                     mimeType: 'image/jpeg',
-                    data: (images[key] as string).split(',')[1]
+                    data: img.split(',')[1]
                 }
             });
         }
