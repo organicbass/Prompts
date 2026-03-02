@@ -1,5 +1,6 @@
 export interface AnalysisResult {
   prompt: string;
+  translatedPrompt?: string;
   timestamp: number;
 }
 
@@ -25,7 +26,8 @@ export interface ImageReferences {
   pants: string | null;
   footwear: string | null;
   styles: string[];
-  resultImage: string | null; // For refinement/correction
+  resultImage: string | null; // The generated image to be corrected
+  refinementReferences: string[]; // Additional reference images for refinement
 }
 
 export interface AIModel {
@@ -38,7 +40,7 @@ export interface AppState {
   images: ImageReferences;
   clothing: ClothingConfig;
   cameraConfig: CameraConfig;
-  renderingStyle: string; // Ex: Photorealistic, 3D Gamer, etc.
+  renderingStyle: string;
   manualGeneral: string[];
   manualStyles: string[];
   customDirections: string;
@@ -48,6 +50,7 @@ export interface AppState {
   isVideoMode: boolean;
   includeFaceIdentity: boolean;
   analyzing: boolean;
+  translating: boolean; // For translation status
   result: AnalysisResult | null;
   error: string | null;
 }

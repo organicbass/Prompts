@@ -16,8 +16,8 @@ Receberás múltiplas imagens de referência e parâmetros de estilo. Deves sint
 
 # 1. CIRCUITO DE REFINAMENTO (IMAGE-TO-IMAGE CORRECTION)
 Se receberes uma "IMAGEM DE RESULTADO" e "INSTRUÇÕES DE AJUSTE":
-- ANALISE O ERRO: Compare a imagem de resultado com os pedidos originais.
-- CORRIJA COM PRECISÃO: Gere um novo prompt que enfatize o que precisa mudar (ex: "increase light intensity", "change shirt to red"), mantendo a base da pose e cenário.
+- ANALISE O ERRO: Compare a imagem de resultado com os pedidos originais e as novas imagens de referência fornecidas para o refinamento.
+- CORRIJA COM PRECISÃO: Gere um novo prompt que enfatize o que precisa mudar, incorporando os elementos das novas referências de refinamento (ex: "change style to match reference 2"), mantendo a base da pose e cenário onde solicitado.
 
 # 2. MOTOR DE VÍDEO (VIDEO SYNTHESIS)
 Se o modo VÍDEO estiver ativo:
@@ -44,81 +44,29 @@ Se o modo VÍDEO estiver ativo:
 6. Final Ultra-Quality Keywords: (8K, ultra-hd, cinematic, etc.)
 `;
 
-// Interface para os resultados da detecção de óptica
-export interface DetectedOptics {
-    camera: string;
-    lens: string;
-    focalLength: string;
-    aperture: string;
-    confidence: string;
-}
-
-// Função para detectar automaticamente câmera/lente de uma imagem de estilo
-export const detectOpticsFromImage = async (imageData: string): Promise<DetectedOptics> => {
+export const translatePrompt = async (text: string): Promise<string> => {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     if (!apiKey) throw new Error("API Key não encontrada no .env");
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-        model: "gemini-2.5-flash",
-    });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-    const prompt = `Analise esta imagem e identifique os equipamentos de câmera/óptica que provavelmente foram usados para criar este visual.
+    const prompt = `Translate the following image generation prompt from English to Portuguese (Brazil). Maintain all technical terms and nuances of the description. 
 
-SINAIS A PROCURAR:
-- Bokeh SWIRLY (girando em espiral) = Helios
-- Bokeh oval + flare horizontal = Anamorphic  
-- Bokeh suave circular = Cooke S7/i
-- Extrema nitidez = Zeiss Master Prime
-- Bokeh romântico = Leica Summilux-C
-- Grão de filme + cores quentes = IMAX Film Camera
-- Imagem ultra-limpa = Sony VENICE 2
-- Cores naturais = ARRI ALEXA 35
-- Alta saturação = RED V-RAPTOR XL
-- Fundo borrado extremo = f/1.4 ou menor
-- Separação suave = f/2.0-f/2.8
-- Tudo em foco = f/5.6+
+Prompt:
+${text}
 
-RESPONDA APENAS EM JSON NESTE FORMATO EXATO (sem markdown, sem code blocks):
-{"camera":"NOME_CAMERA","lens":"NOME_LENTE","focalLength":"NUMERO","aperture":"f/NUMERO","confidence":"high/medium/low"}
-
-OPÇÕES DE CÂMERA: IMAX Film Camera, Panavision Millennium DXL2, ARRI ALEXA 35, Sony VENICE 2, RED V-RAPTOR XL
-OPÇÕES DE LENTE: Helios, Cooke S7/i, Zeiss Master Prime, Leica Summilux-C, Anamorphic
-OPÇÕES DE FOCAL: 14, 16, 20, 24, 35, 40, 50, 75, 85, 100, 135, 200
-OPÇÕES DE ABERTURA: f/0.95, f/1.4, f/1.8, f/2.0, f/2.8, f/4, f/5.6, f/8, f/11`;
+Translation (PT-BR):`;
 
     try {
-        const result = await model.generateContent([
-            prompt,
-            { inlineData: { mimeType: 'image/jpeg', data: imageData.split(',')[1] } }
-        ]);
+        const result = await model.generateContent(prompt);
         const response = await result.response;
-        const text = response.text();
-
-        // Limpar o texto e fazer parse do JSON
-        const cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        const detected = JSON.parse(cleanedText);
-
-        return {
-            camera: detected.camera || 'IMAX Film Camera',
-            lens: detected.lens || 'Helios',
-            focalLength: detected.focalLength || '50',
-            aperture: detected.aperture || 'f/4',
-            confidence: detected.confidence || 'medium'
-        };
+        return response.text() || "Falha na tradução.";
     } catch (error) {
-        console.error("Optics Detection Error:", error);
-        // Retornar valores padrão em caso de erro
-        return {
-            camera: 'IMAX Film Camera',
-            lens: 'Helios',
-            focalLength: '50',
-            aperture: 'f/4',
-            confidence: 'low'
-        };
+        console.error("Translation Error:", error);
+        return "Erro ao traduzir o prompt.";
     }
 };
-
 
 export const analyzeImageWithConfig = async (
     images: ImageReferences,
@@ -143,9 +91,7 @@ export const analyzeImageWithConfig = async (
         systemInstruction: SYSTEM_INSTRUCTION,
     });
 
-    // Construir o prompt de texto
     let textPrompt = "";
-
     textPrompt += `TARGET MODEL: Sauce Prompt Nano Banana Pro\n`;
     textPrompt += `RENDERING MODE: ${renderingStyle}\n\n`;
 
@@ -157,113 +103,54 @@ export const analyzeImageWithConfig = async (
         if (desc) textPrompt += `STYLE & LOOK REFERENCE 0${i + 1}: ${desc}\n`;
     });
 
-    if (clothing.accessories) {
-        textPrompt += `ACCESSORIES: ${clothing.accessories}\n`;
-    }
-    if (clothing.tattoos) {
-        textPrompt += `TATTOOS: ${clothing.tattoos}\n`;
-    }
+    if (clothing.accessories) textPrompt += `ACCESSORIES: ${clothing.accessories}\n`;
+    if (clothing.tattoos) textPrompt += `TATTOOS: ${clothing.tattoos}\n`;
 
     textPrompt += `\nOPTICAL SPECIFICATIONS:\n`;
-    textPrompt += `- Camera Rig: ${camera.camera}\n`;
-    textPrompt += `- Optical Glass: ${camera.lens}\n`;
-    textPrompt += `- Focal Length: ${camera.focalLength}mm\n`;
-    textPrompt += `- Aperture: ${camera.aperture}\n\n`;
+    textPrompt += `- Camera Rig: ${camera.camera}\n- Optical Glass: ${camera.lens}\n- Focal Length: ${camera.focalLength}mm\n- Aperture: ${camera.aperture}\n\n`;
 
-    if (customDirections) {
-        textPrompt += `⚠️ USER CUSTOM DIRECTIONS (MANDATORY - FOLLOW EXACTLY):\n${customDirections}\n\n`;
-    }
+    if (customDirections) textPrompt += `⚠️ USER CUSTOM DIRECTIONS:\n${customDirections}\n\n`;
 
     if (isVideoMode) {
-        textPrompt += `🎬 VIDEO MODE ACTIVE:\n`;
-        textPrompt += `- Movement: ${videoMovement}\n`;
-        textPrompt += `- Action: ${videoAction}\n\n`;
+        textPrompt += `🎬 VIDEO MODE ACTIVE:\n- Movement: ${videoMovement}\n- Action: ${videoAction}\n\n`;
     }
 
     if (correctionInstructions && images.resultImage) {
-        textPrompt += `🔄 REFINEMENT LOOP:\n`;
-        textPrompt += `- User Feedback: ${correctionInstructions}\n`;
-        textPrompt += `- Objective: Correct the provided "RESULT IMAGE" based on these instructions.\n\n`;
+        textPrompt += `🔄 REFINEMENT LOOP:\n- User Feedback: ${correctionInstructions}\n- Objective: Correct the provided "RESULT IMAGE" based on these instructions and additional references.\n\n`;
     }
 
-    textPrompt += `Generate a detailed prompt in English for the target model. Focus on Social Media 2026 stop-power.`;
+    textPrompt += `Generate a detailed prompt in English for the target model.`;
 
-    // Construir o array de parts para a API
     const parts: any[] = [];
-
-    // Adicionar texto
     parts.push({ text: textPrompt });
 
-    // Adicionar imagens se existirem
     if (images.resultImage) {
-        parts.push({
-            inlineData: {
-                mimeType: 'image/jpeg',
-                data: images.resultImage.split(',')[1]
-            }
+        parts.push({ inlineData: { mimeType: 'image/jpeg', data: images.resultImage.split(',')[1] } });
+    }
+
+    // New: Processing refinement references
+    if (images.refinementReferences && images.refinementReferences.length > 0) {
+        images.refinementReferences.forEach((ref, i) => {
+            parts.push({ inlineData: { mimeType: 'image/jpeg', data: ref.split(',')[1] } });
         });
     }
 
-    // General Images
     images.general.forEach(img => {
-        if (img) {
-            parts.push({
-                inlineData: {
-                    mimeType: 'image/jpeg',
-                    data: img.split(',')[1]
-                }
-            });
-        }
+        if (img) parts.push({ inlineData: { mimeType: 'image/jpeg', data: img.split(',')[1] } });
     });
 
     if (images.faces.length > 0) {
         images.faces.forEach((faceData) => {
-            parts.push({
-                inlineData: {
-                    mimeType: 'image/jpeg',
-                    data: faceData.split(',')[1]
-                }
-            });
+            parts.push({ inlineData: { mimeType: 'image/jpeg', data: faceData.split(',')[1] } });
         });
     }
 
-    if (images.shirt) {
-        parts.push({
-            inlineData: {
-                mimeType: 'image/jpeg',
-                data: images.shirt.split(',')[1]
-            }
-        });
-    }
+    if (images.shirt) parts.push({ inlineData: { mimeType: 'image/jpeg', data: images.shirt.split(',')[1] } });
+    if (images.pants) parts.push({ inlineData: { mimeType: 'image/jpeg', data: images.pants.split(',')[1] } });
+    if (images.footwear) parts.push({ inlineData: { mimeType: 'image/jpeg', data: images.footwear.split(',')[1] } });
 
-    if (images.pants) {
-        parts.push({
-            inlineData: {
-                mimeType: 'image/jpeg',
-                data: images.pants.split(',')[1]
-            }
-        });
-    }
-
-    if (images.footwear) {
-        parts.push({
-            inlineData: {
-                mimeType: 'image/jpeg',
-                data: images.footwear.split(',')[1]
-            }
-        });
-    }
-
-    // Style Images
     images.styles.forEach(img => {
-        if (img) {
-            parts.push({
-                inlineData: {
-                    mimeType: 'image/jpeg',
-                    data: img.split(',')[1]
-                }
-            });
-        }
+        if (img) parts.push({ inlineData: { mimeType: 'image/jpeg', data: img.split(',')[1] } });
     });
 
     try {
