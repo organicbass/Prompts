@@ -457,6 +457,16 @@ const App: React.FC = () => {
                             </div>
                         )}
 
+                        {state.error && (
+                            <div className="mt-4 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-[10px] font-bold uppercase tracking-wider flex items-center gap-3">
+                                <span className="text-lg">⚠️</span>
+                                <div>
+                                    <p className="mb-1">Erro de Sincronização:</p>
+                                    <p className="font-mono text-[9px] opacity-70 whitespace-pre-wrap">{state.error}</p>
+                                </div>
+                            </div>
+                        )}
+
                         <button
                             onClick={() => handleAnalyze('initial')}
                             disabled={state.analyzing}
