@@ -163,7 +163,13 @@ const App: React.FC = () => {
             }));
 
         } catch (err: any) {
-            setState(prev => ({ ...prev, analyzing: false, error: err.message }));
+            let userFriendlyError = err.message;
+            if (err.message.includes("429")) {
+                userFriendlyError = "Limite de uso atingido. Por favor, aguarde 60 segundos antes de tentar novamente ou use uma chave de API com plano pago.";
+            } else if (err.message.includes("503")) {
+                userFriendlyError = "O servidor do Google está sobrecarregado no momento. Tente novamente em alguns instantes.";
+            }
+            setState(prev => ({ ...prev, analyzing: false, error: userFriendlyError }));
         }
     };
 
