@@ -49,7 +49,7 @@ export const translatePrompt = async (text: string): Promise<string> => {
     if (!apiKey) throw new Error("API Key não encontrada no .env");
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     const prompt = `Translate the following image generation prompt from English to Portuguese (Brazil). Maintain all technical terms and nuances of the description. 
 
@@ -66,6 +66,11 @@ Translation (PT-BR):`;
         console.error("Translation Error:", error);
         return "Erro ao traduzir o prompt.";
     }
+};
+
+const extractMimeType = (dataUrl: string) => {
+    const match = dataUrl.match(/^data:([^;]+);base64,/);
+    return match ? match[1] : 'image/jpeg';
 };
 
 export const analyzeImageWithConfig = async (
@@ -87,7 +92,7 @@ export const analyzeImageWithConfig = async (
     const genAI = new GoogleGenerativeAI(apiKey);
 
     const model = genAI.getGenerativeModel({
-        model: "gemini-2.5-flash",
+        model: "gemini-2.0-flash",
         systemInstruction: SYSTEM_INSTRUCTION,
     });
 
@@ -125,40 +130,40 @@ export const analyzeImageWithConfig = async (
     parts.push({ text: textPrompt });
 
     if (images.resultImage) {
-        parts.push({ inlineData: { mimeType: 'image/jpeg', data: images.resultImage.split(',')[1] } });
+        parts.push({ inlineData: { mimeType: extractMimeType(images.resultImage), data: images.resultImage.split(',')[1] } });
     }
 
     // New: Processing refinement references
     if (images.refinementReferences && images.refinementReferences.length > 0) {
         images.refinementReferences.forEach((ref, i) => {
-            parts.push({ inlineData: { mimeType: 'image/jpeg', data: ref.split(',')[1] } });
+            parts.push({ inlineData: { mimeType: extractMimeType(ref), data: ref.split(',')[1] } });
         });
     }
 
     images.general.forEach(img => {
-        if (img) parts.push({ inlineData: { mimeType: 'image/jpeg', data: img.split(',')[1] } });
+        if (img) parts.push({ inlineData: { mimeType: extractMimeType(img), data: img.split(',')[1] } });
     });
 
     if (images.faces.length > 0) {
         images.faces.forEach((faceData) => {
-            parts.push({ inlineData: { mimeType: 'image/jpeg', data: faceData.split(',')[1] } });
+            parts.push({ inlineData: { mimeType: extractMimeType(faceData), data: faceData.split(',')[1] } });
         });
     }
 
-    if (images.shirt) parts.push({ inlineData: { mimeType: 'image/jpeg', data: images.shirt.split(',')[1] } });
-    if (images.pants) parts.push({ inlineData: { mimeType: 'image/jpeg', data: images.pants.split(',')[1] } });
-    if (images.footwear) parts.push({ inlineData: { mimeType: 'image/jpeg', data: images.footwear.split(',')[1] } });
+    if (images.shirt) parts.push({ inlineData: { mimeType: extractMimeType(images.shirt), data: images.shirt.split(',')[1] } });
+    if (images.pants) parts.push({ inlineData: { mimeType: extractMimeType(images.pants), data: images.pants.split(',')[1] } });
+    if (images.footwear) parts.push({ inlineData: { mimeType: extractMimeType(images.footwear), data: images.footwear.split(',')[1] } });
 
     images.styles.forEach(img => {
-        if (img) parts.push({ inlineData: { mimeType: 'image/jpeg', data: img.split(',')[1] } });
+        if (img) parts.push({ inlineData: { mimeType: extractMimeType(img), data: img.split(',')[1] } });
     });
 
     try {
         const result = await model.generateContent(parts);
         const response = await result.response;
         return response.text() || "Falha ao gerar o prompt.";
-    } catch (error) {
+    } catch (error: any) {
         console.error("Gemini Analysis Error:", error);
-        throw new Error("A análise falhou. Por favor, tente novamente.");
+        throw new Error(`A análise falhou: ${error.message || 'Erro desconhecido.'} Por favor, tente novamente.`);
     }
 };
